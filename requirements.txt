@@ -1,4 +1,4 @@
-discord.py[voice]
+discord.py>=2.4.0
 davey
-static-ffmpeg
 pynacl
+static-ffmpeg
