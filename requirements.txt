@@ -1,4 +1,3 @@
-discord.py>=2.5.0
-davey
+discord.py
 static-ffmpeg
-pynacl
+yt-dlp
