@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["python3", "gcc", "pkg-config", "libsodium", "cmake", "rustc", "cargo"]
+nixPkgs = ["python3", "gcc", "pkg-config", "libsodium", "ffmpeg", "cmake", "rustc", "cargo"]
 
 [phases.install]
 cmds = ["pip install -r requirements.txt"]
