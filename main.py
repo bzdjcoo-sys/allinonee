@@ -149,11 +149,8 @@ def play_next_song(guild_id):
         if vc.is_playing() or vc.is_paused():
             vc.stop()
 
-        ffmpeg_exe = static_ffmpeg.run.get_or_fetch_platform_executables_or_raise()[0]
-
         audio_source = discord.FFmpegPCMAudio(
             selected_track["url"],
-            executable=ffmpeg_exe,
             **ffmpeg_options
         )
 
