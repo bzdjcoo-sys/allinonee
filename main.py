@@ -6,6 +6,7 @@ from discord.ext import commands
 import static_ffmpeg
 import yt_dlp
 
+# إضافة مسارات ffmpeg
 static_ffmpeg.add_paths()
 
 intents = discord.Intents.default()
@@ -17,6 +18,9 @@ bot = commands.Bot(command_prefix="+", intents=intents)
 
 BOT_ADMIN_ID = 1241496820455313533
 DEVELOPER_NAME = "JrOmar"
+
+# ⚠️ حط ID ديال السيرفر ديالك هنا باش الأوامر تبان فـ الحين فـ Slash Commands
+GUILD_ID = 1534238229002191060 
 
 TAX_CHANNEL_ID = 1534238494015361104
 COME_ROLES = [1534238229002191060]
@@ -176,15 +180,15 @@ async def play_music(interaction: discord.Interaction, link: str):
             await vc.move_to(voice_channel)
 
         loop = asyncio.get_event_loop()
-        if "http://" in link or "https://" in link:
-            data = await loop.run_in_executor(None, lambda: ytdl.extract_info(link, download=False))
-            if 'entries' in data:
-                data = data['entries'][0]
-            stream_url = data.get('url', link)
-            title = data.get('title', 'Unknown Track')
-        else:
-            stream_url = link
-            title = "Direct Audio Link"
+        
+        # استخدام yt-dlp لاستخراج الصوت بأسلوب آمن
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(link, download=False))
+        
+        if 'entries' in data and len(data['entries']) > 0:
+            data = data['entries'][0]
+
+        stream_url = data.get('url')
+        title = data.get('title', 'Direct Stream')
 
         current_track_info = {"title": title, "url": link}
 
@@ -340,9 +344,11 @@ async def on_ready():
     bot.add_view(MusicControlView())
 
     try:
-        # مزامنة الأوامر مع السيرفرات فور تشغيل البوت
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} global slash command(s) successfully!")
+        # مزامنة فورية مع السيرفر المحدد
+        guild = discord.Object(id=GUILD_ID)
+        bot.tree.copy_global_to(guild=guild)
+        synced = await bot.tree.sync(guild=guild)
+        print(f"✅ Synced {len(synced)} command(s) instantly to guild {GUILD_ID}")
     except Exception as e:
         print(f"Failed to sync commands: {e}")
 
