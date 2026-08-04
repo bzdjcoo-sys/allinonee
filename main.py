@@ -30,6 +30,7 @@ BC_ROLES = [1534238273440977006]
 TICKET_STAFF_ROLE_ID = 1534294981727227944
 TICKET_CATEGORY_ID = 1534294859320525031
 
+# ⚡ تم تحديث إعدادات yt-dlp لتجاوز حظر يوتيوب فـ الاستضافات
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'extractaudio': True,
@@ -44,6 +45,11 @@ YTDL_OPTIONS = {
     'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['android', 'ios']
+        }
+    }
 }
 
 FFMPEG_OPTIONS = {
