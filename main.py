@@ -4,7 +4,7 @@ import random
 import re
 import discord
 from discord.ext import commands
-import yt-dlp
+import yt_dlp
 
 # ---------------------------------------------------------
 # 1. إعداد الـ Intents
