@@ -4,7 +4,6 @@ import random
 import re
 import discord
 from discord.ext import commands
-import yt_dlp
 
 # ---------------------------------------------------------
 # 1. إعداد الـ Intents
@@ -31,32 +30,21 @@ LINE_ROLES = [1534238250158526644]   # رولات أمر /line
 BC_ROLES = [1534238273440977006]     # رولات أوامر الإعلانات /bc و /bc_dm
 
 # 🆔 إعدادات نظام التيكيت
-TICKET_STAFF_ROLE_ID = 1534238229002191060
-TICKET_CATEGORY_ID = None
+TICKET_STAFF_ROLE_ID = 1534294981727227944
+TICKET_CATEGORY_ID = 1534294859320525031
 
-# 🎵 قائمة الأغاني العشوائية
+# 🎵 قائمة أغاني / راديو مباشر شغال 24/7 ومستقر 100% بدون مشاكل YouTube
 RANDOM_PLAYLIST = [
-    "https://www.youtube.com/watch?v=5qap5aO4i9A",
-    "https://www.youtube.com/watch?v=DWcJFNfaw9c",
-    "https://www.youtube.com/watch?v=kJQP7kiw5Fk",
-    "https://www.youtube.com/watch?v=fJ9rUzIMcZQ"
+    "https://stream.zeno.fm/f3wvbbqmdg8uv",
+    "https://stream.zeno.fm/0r0xa792kwzuv",
+    "https://icecast.radiofrance.fr/fip-midfi.mp3",
+    "http://stream.live.vc.bbcmedia.co.uk/bbc_radio_one"
 ]
-
-# خيارات yt-dlp & ffmpeg
-ytdl_format_options = {
-    'format': 'bestaudio/best',
-    'quiet': True,
-    'no_warnings': True,
-    'default_search': 'auto',
-    'source_address': '0.0.0.0'
-}
 
 ffmpeg_options = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn',
 }
-
-ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
 
 
 def check_roles(allowed_roles):
@@ -89,45 +77,45 @@ def check_roles(allowed_roles):
 # 🎧 نظام تشغيل الأغاني العشوائية والمكوث في الـ Voice
 # ---------------------------------------------------------
 async def play_random_music(vc: discord.VoiceClient):
-    """تشغيل أغنية عشوائية فـ الروم وباش يسالي يعاود يطلق أغانٍ أخرى تلقائياً"""
+    """تشغيل الصوت فوراً وبشكل مستمر"""
     while vc and vc.is_connected():
-        if not vc.is_playing():
+        if not vc.is_playing() and not vc.is_paused():
             try:
-                song_url = random.choice(RANDOM_PLAYLIST)
-                loop = asyncio.get_event_loop()
-                data = await loop.run_in_executor(None, lambda: ytdl.extract_info(song_url, download=False))
-                
-                if 'entries' in data:
-                    data = data['entries'][0]
-                
-                stream_url = data['url']
+                stream_url = random.choice(RANDOM_PLAYLIST)
                 source = discord.FFmpegPCMAudio(stream_url, **ffmpeg_options)
-                vc.play(source)
+                
+                # استخدام callback باش غير تسالي الأغنية يدوز للثانية
+                def after_playing(error):
+                    if error:
+                        print(f"Player error: {error}")
+
+                vc.play(source, after=after_playing)
+                print(f"Successfully playing stream: {stream_url}")
             except Exception as e:
-                print(f"Error playing voice music: {e}")
+                print(f"Error starting audio player: {e}")
         
-        await asyncio.sleep(2)
+        await asyncio.sleep(5)
 
 
-@bot.tree.command(name="join_voice", description="إدخال البوت لروم صوتية والبدء بتشغيل أغانٍ عشوائية تلقائياً")
-@discord.app_commands.describe(channel="روم الصوت المراد إدخال البوت لها (اختر الروم)")
+@bot.tree.command(name="join_voice", description="إدخال البوت لروم صوتية والبدء بتشغيل الموسيقى فوراً")
+@discord.app_commands.describe(channel="روم الصوت المراد إدخال البوت لها")
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def join_voice(interaction: discord.Interaction, channel: discord.VoiceChannel):
     await interaction.response.defer(ephemeral=True)
     try:
         vc = interaction.guild.voice_client
         if vc:
-            await vc.move_to(channel)
+            if vc.channel.id != channel.id:
+                await vc.move_to(channel)
         else:
-            vc = await channel.connect(reconnect=True)
+            vc = await channel.connect(reconnect=True, timeout=20.0)
 
-        # يوقف أي حاجة خدامة ويطلق الموسيقى المباشرة
         if vc.is_playing():
             vc.stop()
 
         bot.loop.create_task(play_random_music(vc))
 
-        await interaction.followup.send(f"✅ تم دخول البوت إلى {channel.mention} وبدأت الموسيقى التلقائية فوراً!")
+        await interaction.followup.send(f"✅ تم دخول البوت إلى {channel.mention} وبدأت الموسيقى بنجاح!")
     except Exception as e:
         await interaction.followup.send(f"❌ حدث خطأ أثناء الاتصال بالروم: `{e}`")
 
@@ -152,7 +140,6 @@ class TicketControlView(discord.ui.View):
 
     @discord.ui.button(label="إغلاق / Close", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="ticket_close")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # التحقق من أن المستخدم لديه رتبة الدعم أو أدمين
         member = interaction.user
         user_role_ids = [role.id for role in member.roles]
 
