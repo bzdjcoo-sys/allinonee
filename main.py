@@ -1,8 +1,12 @@
 import asyncio
+import os
+import re
 import discord
 from discord.ext import commands
 
+# ---------------------------------------------------------
 # 1. إعداد الـ Intents
+# ---------------------------------------------------------
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
@@ -15,16 +19,13 @@ bot = commands.Bot(command_prefix="+", intents=intents)
 BOT_ADMIN_ID = 1241496820455313533
 DEVELOPER_NAME = "JrOmar"
 
-# 🆔 أيدي الروم المخصصة لأمر الـ Tax
-TAX_CHANNEL_ID = 1533847382742011964
-
-# 🆔 أيدي روم الترحيب (Welcome Room ID)
-WELCOME_CHANNEL_ID = 1533855396433760287
+# 🆔 أيدي الروم المخصصة لأمر والـ Auto-Tax
+TAX_CHANNEL_ID = 1528502051745824798
 
 # 🆔 أيدي الرولات (Role IDs) المخصصة لكل أمر
-COME_ROLES = [1533850449705308210]  # رولات أمر /come
-LINE_ROLES = [1533850521285300335]  # رولات أمر /line
-BC_ROLES = [1533850549261439157]  # رولات أوامر الإعلانات /bc و /bc_dm
+COME_ROLES = [1533943836223602878]  # رولات أمر /come
+LINE_ROLES = [1533943934273982635]  # رولات أمر /line
+BC_ROLES = [1533945689367773224]    # رولات أوامر الإعلانات /bc و /bc_dm
 
 
 # دالة للتحقق من الرولات والصلاحيات
@@ -69,35 +70,67 @@ async def on_ready():
 
 
 # ---------------------------------------------------------
-# حدث الترحيب (Welcome Event)
+# 1. التفاعل التلقائي مع حساب الضريبة (Auto-Tax on Message)
 # ---------------------------------------------------------
 @bot.event
-async def on_member_join(member: discord.Member):
-    channel = member.guild.get_channel(WELCOME_CHANNEL_ID)
-    if not channel:
+async def on_message(message: discord.Message):
+    if message.author.bot:
         return
 
-    embed = discord.Embed(
-        title="👋 مرحباً بك في السيرفر!",
-        description=f"أهلاً بك يا {member.mention} في سيرفر **{member.guild.name}**!\n\nنتمنى لك قضاء وقت ممتع معنا، ولا تنسَ قراءة القوانين.",
-        color=discord.Color.blurple(),
-    )
+    if message.channel.id == TAX_CHANNEL_ID:
+        content = message.content.strip().lower()
 
-    if member.avatar:
-        embed.set_thumbnail(url=member.avatar.url)
-    else:
-        embed.set_thumbnail(url=member.default_avatar.url)
+        if re.match(r"^\d+(\.\d+)?[kmb]?$", content):
+            try:
+                clean_amount = (
+                    content.replace("k", "000")
+                    .replace("m", "000000")
+                    .replace("b", "000000000")
+                    .replace(",", "")
+                )
+                number = int(float(clean_amount))
 
-    embed.set_footer(
-        text=f"العضو رقم: {member.guild.member_count}",
-        icon_url=member.guild.icon.url if member.guild.icon else None,
-    )
+                if number > 0:
+                    with_tax = int(number / 0.95) + 1
+                    tax_only = with_tax - number
 
-    await channel.send(content=f"Welcome {member.mention}! 🎉", embed=embed)
+                    embed = discord.Embed(
+                        title="💳 حاسبة ضريبة تلقائية",
+                        color=discord.Color.green(),
+                    )
+                    embed.add_field(
+                        name="💵 المبلغ المطلوب وصوله:",
+                        value=f"`{number:,}`",
+                        inline=False,
+                    )
+                    embed.add_field(
+                        name="💰 المبلغ الذي يجب تحويله (مع الضريبة):",
+                        value=f"`{with_tax:,}`",
+                        inline=False,
+                    )
+                    embed.add_field(
+                        name="📉 قيمة الضريبة (5%):",
+                        value=f"`{tax_only:,}`",
+                        inline=False,
+                    )
+                    embed.set_footer(
+                        text=f"Requested by {message.author.display_name}"
+                    )
+
+                    try:
+                        await message.delete()
+                    except Exception:
+                        pass
+
+                    await message.channel.send(embed=embed)
+            except ValueError:
+                pass
+
+    await bot.process_commands(message)
 
 
 # ---------------------------------------------------------
-# 1. أمر الـ Tax
+# 2. أمر الـ Tax عبر الـ Slash Command
 # ---------------------------------------------------------
 @bot.tree.command(name="tax", description="حساب ضريبة التحويل ProBot 5%")
 @discord.app_commands.describe(
@@ -130,7 +163,7 @@ async def calculate_tax(interaction: discord.Interaction, amount: str):
         tax_only = with_tax - number
 
         embed = discord.Embed(
-            title="💳 حاسبة ضريبة ", color=discord.Color.green()
+            title="💳 حاسبة ضريبة", color=discord.Color.green()
         )
         embed.add_field(
             name="💵 المبلغ المطلوب وصوله:",
@@ -156,7 +189,7 @@ async def calculate_tax(interaction: discord.Interaction, amount: str):
 
 
 # ---------------------------------------------------------
-# 2. أمر /come
+# 3. أمر /come
 # ---------------------------------------------------------
 @bot.tree.command(
     name="come", description="إرسال طلب حضور (استدعاء) لعضو في الخاص"
@@ -210,7 +243,7 @@ async def come_user(interaction: discord.Interaction, user_id: str):
 
 
 # ---------------------------------------------------------
-# 3. أمر /line
+# 4. أمر /line
 # ---------------------------------------------------------
 @bot.tree.command(name="line", description="إرسال خط فاصل بصورة في الشات")
 @discord.app_commands.describe(image_url="رابط الصورة المراد إرسالها")
@@ -226,7 +259,7 @@ async def send_line(interaction: discord.Interaction, image_url: str):
 
 
 # ---------------------------------------------------------
-# 4. أوامر الـ Broadcast
+# 5. أوامر الـ Broadcast
 # ---------------------------------------------------------
 @bot.tree.command(name="bc", description="إرسال إعلان لشات معين مع صورة")
 @discord.app_commands.describe(
@@ -271,11 +304,14 @@ async def broadcast_dm(interaction: discord.Interaction, message: str):
     members = [m for m in interaction.guild.members if not m.bot]
 
     await interaction.response.send_message(
-        f"⏳ جاري الإرسال إلى **{len(members)}** عضو في الخاص...", ephemeral=True
+        f"⏳ جاري الإرسال إلى **{len(members)}** عضو في الخاص...",
+        ephemeral=True,
     )
 
     success = 0
-    failed = 0
+    failed_dm_closed = 0
+    failed_other = 0
+    last_error_msg = ""
 
     embed = discord.Embed(
         title=f"🔔 إعلان من {interaction.guild.name}",
@@ -285,19 +321,38 @@ async def broadcast_dm(interaction: discord.Interaction, message: str):
 
     for member in members:
         try:
-            await member.send(embed=embed)
+            user = await bot.fetch_user(member.id)
+            await user.send(embed=embed)
             success += 1
-            await asyncio.sleep(1)
-        except Exception:
-            failed += 1
+            await asyncio.sleep(2.0)
+        except discord.Forbidden as e:
+            failed_dm_closed += 1
+            last_error_msg = f"Forbidden (50007): {e}"
+        except discord.HTTPException as e:
+            failed_other += 1
+            last_error_msg = f"HTTP Error {e.status}: {e.text}"
+            if e.status == 429:
+                retry_after = int(e.response.headers.get("Retry-After", 5))
+                await asyncio.sleep(retry_after)
+        except Exception as e:
+            failed_other += 1
+            last_error_msg = str(e)
 
-    await interaction.edit_original_response(
-        content=f"✅ **اكتمل الإرسال!**\n📥 نجح: `{success}` | ❌ فشل: `{failed}`"
+    result_text = (
+        f"✅ **اكتمل الإرسال!**\n"
+        f"📥 **نجح:** `{success}`\n"
+        f"🚫 **فشل (سادين الـ DM / ممنوع):** `{failed_dm_closed}`\n"
+        f"❌ **فشل (أخطاء أخرى):** `{failed_other}`"
     )
+
+    if success == 0:
+        result_text += f"\n\n⚠️ **تفاصيل الخطأ:**\n`{last_error_msg}`\n💡 *تأكد من تفعيل Server Members Intent فـ Discord Developer Portal!*"
+
+    await interaction.edit_original_response(content=result_text)
 
 
 # ---------------------------------------------------------
-# 5. أمر مسح جميع الرسائل في الروم مع زر التأكيد (ms7)
+# 6. أمر مسح جميع الرسائل في الروم مع زر التأكيد (ms7)
 # ---------------------------------------------------------
 class ConfirmDeleteAll(discord.ui.View):
 
@@ -322,7 +377,6 @@ class ConfirmDeleteAll(discord.ui.View):
         )
         try:
             deleted = await interaction.channel.purge(limit=None)
-            # رسالة مؤقتة تخبره بعدد الرسائل المحذوفة ثم تختفي
             temp_msg = await interaction.channel.send(
                 f"✅ تم مسح `{len(deleted)}` رسالة بنجاح!"
             )
@@ -361,7 +415,7 @@ async def ms7_all(interaction: discord.Interaction):
 
 
 # ---------------------------------------------------------
-# 6. أمر مسح عدد معين من الرسائل (ms7 عدد)
+# 7. أمر مسح عدد معين من الرسائل (ms7_count)
 # ---------------------------------------------------------
 @bot.tree.command(
     name="ms7_count",
@@ -378,10 +432,9 @@ async def mss7_count(interaction: discord.Interaction, count: int):
 
     await interaction.response.defer(ephemeral=True)
     try:
-        # يتم مسح العدد المطلوب + 1 (لإزالة رسالة الأمر نفسه أيضاً لتكون نظيفة)
-        deleted = await interaction.channel.purge(limit=count + 1)
+        deleted = await interaction.channel.purge(limit=count)
         temp_msg = await interaction.channel.send(
-            f"✅ تم مسح `{len(deleted) - 1}` رسالة بنجاح!"
+            f"✅ تم مسح `{len(deleted)}` رسالة بنجاح!"
         )
         await asyncio.sleep(3)
         await temp_msg.delete()
@@ -390,7 +443,7 @@ async def mss7_count(interaction: discord.Interaction, count: int):
 
 
 # ---------------------------------------------------------
-# 7. أمر فتح الروم (7l)
+# 8. أمر فتح الروم (7l)
 # ---------------------------------------------------------
 @bot.tree.command(name="7l", description="فتح الروم لتسمح للأعضاء بالكتابة فيها")
 @discord.app_commands.checks.has_permissions(manage_channels=True)
@@ -412,14 +465,14 @@ async def open_channel(interaction: discord.Interaction):
 
 
 # ---------------------------------------------------------
-# 8. أمر إغلاق الروم (sd)
+# 9. أمر إغلاق الروم (sd)
 # ---------------------------------------------------------
 @bot.tree.command(name="sd", description="إغلاق الروم لمنع الأعضاء من التحدث فيها")
 @discord.app_commands.checks.has_permissions(manage_channels=True)
 async def close_channel(interaction: discord.Interaction):
     try:
         await interaction.channel.set_permissions(
-            interaction.guild.default_role, send_messages=False
+            interaction.guild.default_role, send_permissions=False
         )
         embed = discord.Embed(
             title="🔒 تم إغلاق الروم",
@@ -433,5 +486,7 @@ async def close_channel(interaction: discord.Interaction):
         )
 
 
-# ⚠️ التوكن الخاص بك
+# ---------------------------------------------------------
+# تشغيل البوت عبر BOT_TOKEN المتاح في Environment Variables
+# ---------------------------------------------------------
 bot.run(os.environ.get("BOT_TOKEN"))
