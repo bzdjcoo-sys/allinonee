@@ -26,15 +26,15 @@ DEVELOPER_NAME = "JrOmar"
 TAX_CHANNEL_ID = 1534238494015361104
 
 # 🆔 أيدي الرولات (Role IDs) المخصصة لكل أمر
-COME_ROLES = [1534238229002191060]  # رولات أمر /come
-LINE_ROLES = [1534238250158526644]  # رولات أمر /line
-BC_ROLES = [1534238273440977006]    # رولات أوامر الإعلانات /bc و /bc_dm
+COME_ROLES = [1534238229002191060]   # رولات أمر /come
+LINE_ROLES = [1534238250158526644]   # رولات أمر /line
+BC_ROLES = [1534238273440977006]     # رولات أوامر الإعلانات /bc و /bc_dm
 
 # 🆔 إعدادات نظام التيكيت
 TICKET_STAFF_ROLE_ID = 1534238229002191060
 TICKET_CATEGORY_ID = None
 
-# 🎵 قائمة الأغاني العشوائية (حط هنا روابط أغاني ولا مقاطع من YouTube لي بغيتي)
+# 🎵 قائمة الأغاني العشوائية
 RANDOM_PLAYLIST = [
     "https://www.youtube.com/watch?v=5qap5aO4i9A",
     "https://www.youtube.com/watch?v=DWcJFNfaw9c",
@@ -121,7 +121,6 @@ async def join_voice(interaction: discord.Interaction, channel: discord.VoiceCha
         else:
             vc = await channel.connect(reconnect=True)
 
-        # تشغيل الستريم د الأغاني فـ Background
         bot.loop.create_task(play_random_music(vc))
 
         await interaction.followup.send(f"✅ تم دخول البوت إلى الروم الصوتية {channel.mention} وبدأ تشغيل الأغاني العشوائية!")
@@ -240,7 +239,7 @@ async def setup_ticket(interaction: discord.Interaction):
 
 
 # ---------------------------------------------------------
-# Event On Ready
+# Event On Ready & Errors Handling
 # ---------------------------------------------------------
 @bot.event
 async def on_ready():
@@ -248,8 +247,9 @@ async def on_ready():
     bot.add_view(TicketControlView())
 
     try:
-        await bot.tree.sync()
-        print("Synced global slash commands successfully!")
+        # تسجيل الأوامر فورياً
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} global slash command(s) successfully!")
     except Exception as e:
         print(f"Failed to sync commands: {e}")
 
@@ -257,6 +257,14 @@ async def on_ready():
     print(f"System Bot is online as: {bot.user.name}")
     print(f"Developer: {DEVELOPER_NAME}")
     print("==========================================")
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    """تجاهل أخطاء الأوامر غير الموجودة لتنظيف الـ Logs"""
+    if isinstance(error, commands.CommandNotFound):
+        return
+    raise error
 
 
 # ---------------------------------------------------------
@@ -425,7 +433,6 @@ async def broadcast_dm(interaction: discord.Interaction, message: str):
     await interaction.response.send_message(f"⏳ جاري الإرسال إلى **{len(members)}** عضو في الخاص...", ephemeral=True)
 
     success, failed_dm_closed, failed_other = 0, 0, 0
-    last_error_msg = ""
     embed = discord.Embed(title=f"🔔 إعلان من {interaction.guild.name}", description=message, color=discord.Color.blue())
 
     for member in members:
@@ -434,20 +441,17 @@ async def broadcast_dm(interaction: discord.Interaction, message: str):
             await user.send(embed=embed)
             success += 1
             await asyncio.sleep(2.0)
-        except discord.Forbidden as e:
+        except discord.Forbidden:
             failed_dm_closed += 1
-            last_error_msg = f"Forbidden (50007): {e}"
         except discord.HTTPException as e:
             failed_other += 1
-            last_error_msg = f"HTTP Error {e.status}: {e.text}"
             if e.status == 429:
                 retry_after = int(e.response.headers.get("Retry-After", 5))
                 await asyncio.sleep(retry_after)
-        except Exception as e:
+        except Exception:
             failed_other += 1
-            last_error_msg = str(e)
 
-    result_text = f"✅ **اكتمل الإرسال!**\n📥 **نجح:** `{success}`\n🚫 **فشل (DM):** `{failed_dm_closed}`\n❌ **فشل (أخرى):** `{failed_other}`"
+    result_text = f"✅ **اكتمل الإرسال!**\n📥 **نجح:** `{success}`\n🚫 **فشل (DM مغلق):** `{failed_dm_closed}`\n❌ **فشل (أخرى):** `{failed_other}`"
     await interaction.edit_original_response(content=result_text)
 
 
