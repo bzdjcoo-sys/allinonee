@@ -1,4 +1,4 @@
 discord.py
+PyNaCl
 static-ffmpeg
 yt-dlp
-PyNaCl
