@@ -1,4 +1,5 @@
 discord.py
+davey
 PyNaCl
 static-ffmpeg
 yt-dlp
