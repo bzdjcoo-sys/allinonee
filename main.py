@@ -125,7 +125,7 @@ def create_music_embed(guild):
 
 
 def play_next_song(guild_id):
-    """دالة كتشغل الأغنية التالية تلقائياً عند انتهاء الأغنية الحالية"""
+    """دالة تشغيل الأغنية التالية تلقائياً عند انتهاء الأغنية الحالية"""
     guild = bot.get_guild(guild_id)
     if not guild:
         return
@@ -143,17 +143,18 @@ def play_next_song(guild_id):
     def after_playing(error):
         if error:
             print(f"Music Error: {error}")
-        bot.loop.call_soon_threadsafe(play_next_song, guild_id)
+        if vc and vc.is_connected():
+            bot.loop.call_soon_threadsafe(play_next_song, guild_id)
 
     try:
         if vc.is_playing() or vc.is_paused():
             vc.stop()
 
-        # جلب المسار الخاص بـ FFmpeg من مكتبة static_ffmpeg
         ffmpeg_exe = static_ffmpeg.run.get_or_fetch_platform_executables_or_raise()[0]
-        source = discord.FFmpegPCMAudio(selected_track["url"], executable=ffmpeg_exe, **ffmpeg_options)
-        
-        vc.play(source, after=after_playing)
+        raw_source = discord.FFmpegPCMAudio(selected_track["url"], executable=ffmpeg_exe, **ffmpeg_options)
+        audio_source = discord.PCMVolumeTransformer(raw_source, volume=1.0)
+
+        vc.play(audio_source, after=after_playing)
 
         if panel_message:
             bot.loop.create_task(panel_message.edit(embed=create_music_embed(guild), view=MusicControlView()))
@@ -177,10 +178,7 @@ class PlaylistSelect(discord.ui.Select):
 
         if vc and vc.is_connected():
             await interaction.response.send_message(f"✅ تم تغيير القائمة إلى **{MUSIC_PLAYLISTS[active_playlist_key]['name']}**", ephemeral=True)
-            if vc.is_playing() or vc.is_paused():
-                vc.stop()
-            else:
-                play_next_song(interaction.guild.id)
+            play_next_song(interaction.guild.id)
         else:
             await interaction.response.send_message("❌ البوت غير متصل بأي روم صوتية حالياً!", ephemeral=True)
 
@@ -247,13 +245,10 @@ async def join_voice(interaction: discord.Interaction, channel: discord.VoiceCha
             if vc.channel.id != channel.id:
                 await vc.move_to(channel)
         else:
-            vc = await channel.connect(reconnect=True, timeout=20.0)
+            vc = await channel.connect(reconnect=True, timeout=30.0)
 
-        # مهلة بسيطة للتأكد من استقرار الاتصال بالصوت
-        await asyncio.sleep(1)
-
-        if vc.is_playing() or vc.is_paused():
-            vc.stop()
+        # مهلة ثانيتين لضمان استقرار الاتصال الصوتي قبل إرسال أمر التشغيل
+        await asyncio.sleep(2)
 
         panel_message = await channel.send(embed=create_music_embed(interaction.guild), view=MusicControlView())
         
