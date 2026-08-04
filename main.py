@@ -106,10 +106,10 @@ async def play_random_music(vc: discord.VoiceClient):
             except Exception as e:
                 print(f"Error playing voice music: {e}")
         
-        await asyncio.sleep(5)
+        await asyncio.sleep(2)
 
 
-@bot.tree.command(name="join_voice", description="إدخال البوت لروم صوتية والبدء بتشغيل أغانٍ عشوائية")
+@bot.tree.command(name="join_voice", description="إدخال البوت لروم صوتية والبدء بتشغيل أغانٍ عشوائية تلقائياً")
 @discord.app_commands.describe(channel="روم الصوت المراد إدخال البوت لها (اختر الروم)")
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def join_voice(interaction: discord.Interaction, channel: discord.VoiceChannel):
@@ -121,9 +121,13 @@ async def join_voice(interaction: discord.Interaction, channel: discord.VoiceCha
         else:
             vc = await channel.connect(reconnect=True)
 
+        # يوقف أي حاجة خدامة ويطلق الموسيقى المباشرة
+        if vc.is_playing():
+            vc.stop()
+
         bot.loop.create_task(play_random_music(vc))
 
-        await interaction.followup.send(f"✅ تم دخول البوت إلى الروم الصوتية {channel.mention} وبدأ تشغيل الأغاني العشوائية!")
+        await interaction.followup.send(f"✅ تم دخول البوت إلى {channel.mention} وبدأت الموسيقى التلقائية فوراً!")
     except Exception as e:
         await interaction.followup.send(f"❌ حدث خطأ أثناء الاتصال بالروم: `{e}`")
 
@@ -148,6 +152,23 @@ class TicketControlView(discord.ui.View):
 
     @discord.ui.button(label="إغلاق / Close", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="ticket_close")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # التحقق من أن المستخدم لديه رتبة الدعم أو أدمين
+        member = interaction.user
+        user_role_ids = [role.id for role in member.roles]
+
+        is_staff = (
+            TICKET_STAFF_ROLE_ID in user_role_ids 
+            or member.guild_permissions.administrator 
+            or member.id == BOT_ADMIN_ID
+        )
+
+        if not is_staff:
+            await interaction.response.send_message(
+                "⛔ **عذراً!** فقط أعضاء طاقم الدعم (Ticket Support) هم من يمكنهم إغلاق التيكيت.", 
+                ephemeral=True
+            )
+            return
+
         await interaction.response.send_message("🔒 سيتم إغلاق التيكيت خلال 5 ثوانٍ...")
         await asyncio.sleep(5)
         await interaction.channel.delete()
@@ -247,7 +268,6 @@ async def on_ready():
     bot.add_view(TicketControlView())
 
     try:
-        # تسجيل الأوامر فورياً
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} global slash command(s) successfully!")
     except Exception as e:
@@ -261,7 +281,6 @@ async def on_ready():
 
 @bot.event
 async def on_command_error(ctx, error):
-    """تجاهل أخطاء الأوامر غير الموجودة لتنظيف الـ Logs"""
     if isinstance(error, commands.CommandNotFound):
         return
     raise error
@@ -480,7 +499,7 @@ class ConfirmDeleteAll(discord.ui.View):
         if interaction.user != self.author:
             await interaction.response.send_message("❌ ليس مسموحاً لك استخدام هذا الزر.", ephemeral=True)
             return
-        await interaction.response.edit_message(content="❌ تم إلغاء عملية الحذف.", view=None)
+        await interaction.edit_original_response(content="❌ تم إلغاء عملية الحذف.", view=None)
 
 
 @bot.tree.command(name="ms7", description="مسح جميع الرسائل في الروم الحالية")
