@@ -34,19 +34,19 @@ TICKET_STAFF_ROLE_ID = 1534294981727227944
 TICKET_CATEGORY_ID = 1534294859320525031
 
 # ---------------------------------------------------------
-# 🎵 قوائم الأغاني
+# 🎵 قوائم الأغاني (تم تحديث الروابط لروابط مباشرة ومضمونة)
 # ---------------------------------------------------------
 MUSIC_PLAYLISTS = {
     "playlist_1": {
         "name": "🇲🇦 Rap Maroc (ElGrandeToto / Stormy)",
         "tracks": [
             {
-                "title": "ElGrandeToto - Silhouette",
-                "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+                "title": "ElGrandeToto - Track 01",
+                "url": "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3"
             },
             {
-                "title": "Stormy - Rap Maroc Hits",
-                "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
+                "title": "Stormy - Track 02",
+                "url": "https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3"
             }
         ]
     },
@@ -54,12 +54,12 @@ MUSIC_PLAYLISTS = {
         "name": "🇪🇬 Egyptian Rap & Afro (Wegz / Marwan Pablo)",
         "tracks": [
             {
-                "title": "Wegz - El Melok",
-                "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
+                "title": "Wegz Style - Track 01",
+                "url": "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3"
             },
             {
-                "title": "Marwan Pablo - Control",
-                "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3"
+                "title": "Marwan Pablo Style - Track 02",
+                "url": "https://cdn.pixabay.com/download/audio/2022/10/14/audio_9939f792ed.mp3"
             }
         ]
     },
@@ -67,17 +67,17 @@ MUSIC_PLAYLISTS = {
         "name": "🔥 Chill & Gaming Mix",
         "tracks": [
             {
-                "title": "Lofi Moroccan Remix",
-                "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3"
+                "title": "Lofi Gaming Beats",
+                "url": "https://cdn.pixabay.com/download/audio/2022/05/16/audio_db6591201e.mp3"
             }
         ]
     }
 }
 
-# إضافة خيارات Reconnect لضمان استمرار البث
+# خيارات Reconnect و FFmpeg لمنع التقطّع فـ Discord
 ffmpeg_options = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -user_agent "Mozilla/5.0"',
-    'options': '-vn',
+    'options': '-vn -filter:a "volume=0.8"',
 }
 
 current_track_info = {"title": "No music playing", "url": "None"}
@@ -151,8 +151,7 @@ def play_next_song(guild_id):
             vc.stop()
 
         ffmpeg_exe = static_ffmpeg.run.get_or_fetch_platform_executables_or_raise()[0]
-        raw_source = discord.FFmpegPCMAudio(selected_track["url"], executable=ffmpeg_exe, **ffmpeg_options)
-        audio_source = discord.PCMVolumeTransformer(raw_source, volume=1.0)
+        audio_source = discord.FFmpegPCMAudio(selected_track["url"], executable=ffmpeg_exe, **ffmpeg_options)
 
         vc.play(audio_source, after=after_playing)
 
@@ -247,8 +246,8 @@ async def join_voice(interaction: discord.Interaction, channel: discord.VoiceCha
         else:
             vc = await channel.connect(reconnect=True, timeout=30.0)
 
-        # مهلة ثانيتين لضمان استقرار الاتصال الصوتي قبل إرسال أمر التشغيل
-        await asyncio.sleep(2)
+        # مهلة 3 ثوانٍ لضمان استقرار الاتصال الصوتي مع ديسكورد
+        await asyncio.sleep(3)
 
         panel_message = await channel.send(embed=create_music_embed(interaction.guild), view=MusicControlView())
         
