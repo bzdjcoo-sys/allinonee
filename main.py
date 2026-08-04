@@ -21,37 +21,57 @@ bot = commands.Bot(command_prefix="+", intents=intents)
 BOT_ADMIN_ID = 1241496820455313533
 DEVELOPER_NAME = "JrOmar"
 
-# 🆔 أيدي الروم المخصصة لأمر والـ Auto-Tax
 TAX_CHANNEL_ID = 1534238494015361104
+COME_ROLES = [1534238229002191060]
+LINE_ROLES = [1534238250158526644]
+BC_ROLES = [1534238273440977006]
 
-# 🆔 أيدي الرولات (Role IDs) المخصصة لكل أمر
-COME_ROLES = [1534238229002191060]   # رولات أمر /come
-LINE_ROLES = [1534238250158526644]   # رولات أمر /line
-BC_ROLES = [1534238273440977006]     # رولات أوامر الإعلانات /bc و /bc_dm
-
-# 🆔 إعدادات نظام التيكيت
 TICKET_STAFF_ROLE_ID = 1534294981727227944
 TICKET_CATEGORY_ID = 1534294859320525031
 
-# 🎵 قائمة أغاني / راديو مباشر شغال 24/7 ومستقر 100% بدون مشاكل YouTube
-RANDOM_PLAYLIST = [
-    "https://stream.zeno.fm/f3wvbbqmdg8uv",
-    "https://stream.zeno.fm/0r0xa792kwzuv",
-    "https://icecast.radiofrance.fr/fip-midfi.mp3",
-    "http://stream.live.vc.bbcmedia.co.uk/bbc_radio_one"
-]
+# ---------------------------------------------------------
+# 🎵 الـ Playlists والروابط المباشرة للاغاني
+# ---------------------------------------------------------
+MUSIC_PLAYLISTS = {
+    "playlist_1": {
+        "name": "🎧 Chill & Relax Hits",
+        "description": "موسيقى هادئة للاسترخاء والتركيز",
+        "tracks": [
+            {"title": "Chill Vibes Radio 24/7", "url": "https://stream.zeno.fm/f3wvbbqmdg8uv"},
+            {"title": "Lo-Fi Beats Station", "url": "https://stream.zeno.fm/0r0xa792kwzuv"}
+        ]
+    },
+    "playlist_2": {
+        "name": "🔥 Gaming & Bass Boosted",
+        "description": "أغاني حماسية للألعاب والـ Gaming",
+        "tracks": [
+            {"title": "FIP Radio Smooth Hits", "url": "https://icecast.radiofrance.fr/fip-midfi.mp3"},
+            {"title": "NCS Style Energy Stream", "url": "https://stream.zeno.fm/f3wvbbqmdg8uv"}
+        ]
+    },
+    "playlist_3": {
+        "name": "📻 Pop & Top Charts Radio",
+        "description": "أحدث الأغاني والراديو العالمي",
+        "tracks": [
+            {"title": "BBC Radio 1 Hits", "url": "http://stream.live.vc.bbcmedia.co.uk/bbc_radio_one"},
+            {"title": "Global Hits Station", "url": "https://icecast.radiofrance.fr/fip-midfi.mp3"}
+        ]
+    }
+}
 
 ffmpeg_options = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn',
 }
 
+# متغيّرات عامة لتتبع الأغنية الحالية والـ Voice Client
+current_track_info = {"title": "No music playing", "url": "None"}
+active_playlist_key = "playlist_1"
+
 
 def check_roles(allowed_roles):
     async def predicate(interaction: discord.Interaction):
-        if interaction.user.id == BOT_ADMIN_ID:
-            return True
-        if interaction.user.guild_permissions.administrator:
+        if interaction.user.id == BOT_ADMIN_ID or interaction.user.guild_permissions.administrator:
             return True
 
         try:
@@ -60,48 +80,137 @@ def check_roles(allowed_roles):
             member = interaction.user
 
         user_role_ids = [role.id for role in member.roles]
-
         if any(role_id in allowed_roles for role_id in user_role_ids):
             return True
 
-        await interaction.response.send_message(
-            "⛔ **عذراً!** ليس لديك الرتبة المخصصة لاستخدام هذا الأمر.",
-            ephemeral=True,
-        )
+        await interaction.response.send_message("⛔ **عذراً!** ليس لديك الرتبة المخصصة لاستخدام هذا الأمر.", ephemeral=True)
         return False
 
     return discord.app_commands.check(predicate)
 
 
 # ---------------------------------------------------------
-# 🎧 نظام تشغيل الأغاني العشوائية والمكوث في الـ Voice
+# 🎛️ لوحة تحكم الموسيقى (LunaBot Style Player Panel)
 # ---------------------------------------------------------
-async def play_random_music(vc: discord.VoiceClient):
-    """تشغيل الصوت فوراً وبشكل مستمر"""
+def create_music_embed(guild):
+    embed = discord.Embed(
+        title="🎵 Luna Music Player | لوحة تشغيل الموسيقى",
+        description=f"**🔊 الأغنية الشغالة حالياً:**\n▶️ `{current_track_info['title']}`\n\n"
+                    f"**📋 قوائم الموسيقى المتاحة (Playlists):**\n"
+                    f"1️⃣ **Playlist 1:** Chill & Relax Hits\n"
+                    f"2️⃣ **Playlist 2:** Gaming & Bass Boosted\n"
+                    f"3️⃣ **Playlist 3:** Pop & Top Charts Radio",
+        color=discord.Color.purple()
+    )
+    if guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
+    embed.set_footer(text="اختر Playlist من القائمة أسفله أو استعمل الأزراز للتحكم فـ الموسيقى")
+    return embed
+
+
+class PlaylistSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Playlist 1: Chill Hits", value="playlist_1", description="Chill & Relax Beats", emoji="🎧"),
+            discord.SelectOption(label="Playlist 2: Gaming Hits", value="playlist_2", description="Bass & High Energy Music", emoji="🔥"),
+            discord.SelectOption(label="Playlist 3: Radio Hits", value="playlist_3", description="BBC & Global Radio Charts", emoji="📻")
+        ]
+        super().__init__(placeholder="🎵 اختر Playlist لتغير نوع الموسيقى...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        global active_playlist_key
+        active_playlist_key = self.values[0]
+        vc = interaction.guild.voice_client
+
+        if vc and vc.is_connected():
+            if vc.is_playing() or vc.is_paused():
+                vc.stop()  # سيتم الانتقال تلقائياً للأغنية التالية من الـ Playlist الجديدة
+            await interaction.response.edit_message(content=f"✅ تم تغيير الـ Playlist إلى **{MUSIC_PLAYLISTS[active_playlist_key]['name']}**", embed=create_music_embed(interaction.guild))
+        else:
+            await interaction.response.send_message("❌ البوت غير متصل بأي روم صوتية حالياً!", ephemeral=True)
+
+
+class MusicControlView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(PlaylistSelect())
+
+    @discord.ui.button(label="Pause / Play", style=discord.ButtonStyle.primary, emoji="⏯️", custom_id="music_pause_play")
+    async def pause_play(self, interaction: discord.Interaction, button: discord.ui.Button):
+        vc = interaction.guild.voice_client
+        if not vc or not vc.is_connected():
+            await interaction.response.send_message("❌ البوت غير متصل بالروم الصوتية!", ephemeral=True)
+            return
+
+        if vc.is_playing():
+            vc.pause()
+            await interaction.response.send_message("⏸️ تم إيقاف الموسيقى مؤقتاً (Paused).", ephemeral=True)
+        elif vc.is_paused():
+            vc.resume()
+            await interaction.response.send_message("▶️ تم استئناف تشغيل الموسيقى (Resumed).", ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ لا توجد موسيقى شغالة حالياً.", ephemeral=True)
+
+    @discord.ui.button(label="Pass / Skip", style=discord.ButtonStyle.secondary, emoji="⏭️", custom_id="music_skip")
+    async def skip_music(self, interaction: discord.Interaction, button: discord.ui.Button):
+        vc = interaction.guild.voice_client
+        if vc and (vc.is_playing() or vc.is_paused()):
+            vc.stop()
+            await interaction.response.send_message("⏭️ تم تخطي الأغنية الحالية وتغيير الموسيقى!", ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ لا توجد أغنية لتخطيها.", ephemeral=True)
+
+    @discord.ui.button(label="Stop / Leave", style=discord.ButtonStyle.danger, emoji="⏹️", custom_id="music_stop")
+    async def stop_music(self, interaction: discord.Interaction, button: discord.ui.Button):
+        vc = interaction.guild.voice_client
+        if vc and vc.is_connected():
+            await vc.disconnect()
+            await interaction.response.send_message("⏹️ تم إيقاف الموسيقى وإخراج البوت من الروم الصوتية.", ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ البوت غير متصل بأي روم صوتية.", ephemeral=True)
+
+    @discord.ui.button(label="Give Link", style=discord.ButtonStyle.success, emoji="🔗", custom_id="music_link")
+    async def give_link(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if current_track_info["url"] != "None":
+            await interaction.response.send_message(
+                f"🔗 **رابط الموسيقى الشغالة حالياً:**\n📌 **الاسم:** `{current_track_info['title']}`\n🌐 **الرابط:** {current_track_info['url']}",
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message("❌ لا تتوفر أي أغنية شغالة حالياً للحصول على رابطها.", ephemeral=True)
+
+
+async def play_playlist_loop(vc: discord.VoiceClient, interaction: discord.Interaction):
+    """دالة تدوير وتشغيل الموسيقى"""
+    global current_track_info
     while vc and vc.is_connected():
         if not vc.is_playing() and not vc.is_paused():
             try:
-                stream_url = random.choice(RANDOM_PLAYLIST)
-                source = discord.FFmpegPCMAudio(stream_url, **ffmpeg_options)
+                playlist_data = MUSIC_PLAYLISTS.get(active_playlist_key, MUSIC_PLAYLISTS["playlist_1"])
+                selected_track = random.choice(playlist_data["tracks"])
                 
-                # استخدام callback باش غير تسالي الأغنية يدوز للثانية
-                def after_playing(error):
-                    if error:
-                        print(f"Player error: {error}")
+                current_track_info = selected_track
+                
+                source = discord.FFmpegPCMAudio(selected_track["url"], **ffmpeg_options)
+                vc.play(source)
 
-                vc.play(source, after=after_playing)
-                print(f"Successfully playing stream: {stream_url}")
+                # تحديث البنل بالمعلومات الجديدة
+                try:
+                    await interaction.edit_original_response(embed=create_music_embed(interaction.guild), view=MusicControlView())
+                except Exception:
+                    pass
+
             except Exception as e:
-                print(f"Error starting audio player: {e}")
+                print(f"Error in music loop: {e}")
         
-        await asyncio.sleep(5)
+        await asyncio.sleep(4)
 
 
-@bot.tree.command(name="join_voice", description="إدخال البوت لروم صوتية والبدء بتشغيل الموسيقى فوراً")
-@discord.app_commands.describe(channel="روم الصوت المراد إدخال البوت لها")
+@bot.tree.command(name="join_voice", description="إدخال البوت للروم الصوتية وإظهار بنل التحكم فـ الموسيقى")
+@discord.app_commands.describe(channel="الروم الصوتية المراد إدخال البوت إليها")
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def join_voice(interaction: discord.Interaction, channel: discord.VoiceChannel):
-    await interaction.response.defer(ephemeral=True)
+    await interaction.response.defer()
     try:
         vc = interaction.guild.voice_client
         if vc:
@@ -113,11 +222,11 @@ async def join_voice(interaction: discord.Interaction, channel: discord.VoiceCha
         if vc.is_playing():
             vc.stop()
 
-        bot.loop.create_task(play_random_music(vc))
+        bot.loop.create_task(play_playlist_loop(vc, interaction))
 
-        await interaction.followup.send(f"✅ تم دخول البوت إلى {channel.mention} وبدأت الموسيقى بنجاح!")
+        await interaction.followup.send(embed=create_music_embed(interaction.guild), view=MusicControlView())
     except Exception as e:
-        await interaction.followup.send(f"❌ حدث خطأ أثناء الاتصال بالروم: `{e}`")
+        await interaction.followup.send(f"❌ حدث خطأ أثناء الاتصال بالروم: `{e}`", ephemeral=True)
 
 
 @bot.tree.command(name="leave_voice", description="إخراج البوت من الروم الصوتية")
@@ -150,10 +259,7 @@ class TicketControlView(discord.ui.View):
         )
 
         if not is_staff:
-            await interaction.response.send_message(
-                "⛔ **عذراً!** فقط أعضاء طاقم الدعم (Ticket Support) هم من يمكنهم إغلاق التيكيت.", 
-                ephemeral=True
-            )
+            await interaction.response.send_message("⛔ **عذراً!** فقط أعضاء طاقم الدعم هم من يمكنهم إغلاق التيكيت.", ephemeral=True)
             return
 
         await interaction.response.send_message("🔒 سيتم إغلاق التيكيت خلال 5 ثوانٍ...")
@@ -215,7 +321,6 @@ class TicketLaunchView(discord.ui.View):
 
         staff_mention = staff_role.mention if staff_role else ""
         await ticket_channel.send(content=f"{user.mention} {staff_mention}", embed=embed, view=TicketControlView())
-
         await interaction.response.send_message(f"✅ تم إنشاء التيكيت بنجاح: {ticket_channel.mention}", ephemeral=True)
 
     @discord.ui.button(label="الدعم العام / General Support", style=discord.ButtonStyle.primary, emoji="📩", custom_id="ticket_general")
@@ -239,7 +344,6 @@ async def setup_ticket(interaction: discord.Interaction):
     )
     if interaction.guild.icon:
         embed.set_thumbnail(url=interaction.guild.icon.url)
-        
     embed.set_footer(text=f"{interaction.guild.name} • Ticket System")
 
     await interaction.channel.send(embed=embed, view=TicketLaunchView())
@@ -247,12 +351,13 @@ async def setup_ticket(interaction: discord.Interaction):
 
 
 # ---------------------------------------------------------
-# Event On Ready & Errors Handling
+# Event On Ready & Bot Events
 # ---------------------------------------------------------
 @bot.event
 async def on_ready():
     bot.add_view(TicketLaunchView())
     bot.add_view(TicketControlView())
+    bot.add_view(MusicControlView())
 
     try:
         synced = await bot.tree.sync()
@@ -267,16 +372,6 @@ async def on_ready():
 
 
 @bot.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.CommandNotFound):
-        return
-    raise error
-
-
-# ---------------------------------------------------------
-# التفاعل التلقائي مع حساب الضريبة (Auto-Tax on Message)
-# ---------------------------------------------------------
-@bot.event
 async def on_message(message: discord.Message):
     if message.author.bot:
         return
@@ -286,40 +381,18 @@ async def on_message(message: discord.Message):
 
         if re.match(r"^\d+(\.\d+)?[kmb]?$", content):
             try:
-                clean_amount = (
-                    content.replace("k", "000")
-                    .replace("m", "000000")
-                    .replace("b", "000000000")
-                    .replace(",", "")
-                )
+                clean_amount = content.replace("k", "000").replace("m", "000000").replace("b", "000000000").replace(",", "")
                 number = int(float(clean_amount))
 
                 if number > 0:
                     with_tax = int(number / 0.95) + 1
                     tax_only = with_tax - number
 
-                    embed = discord.Embed(
-                        title="💳 حاسبة ضريبة تلقائية",
-                        color=discord.Color.green(),
-                    )
-                    embed.add_field(
-                        name="💵 المبلغ المطلوب وصوله:",
-                        value=f"`{number:,}`",
-                        inline=False,
-                    )
-                    embed.add_field(
-                        name="💰 المبلغ الذي يجب تحويله (مع الضريبة):",
-                        value=f"`{with_tax:,}`",
-                        inline=False,
-                    )
-                    embed.add_field(
-                        name="📉 قيمة الضريبة (5%):",
-                        value=f"`{tax_only:,}`",
-                        inline=False,
-                    )
-                    embed.set_footer(
-                        text=f"Requested by {message.author.display_name}"
-                    )
+                    embed = discord.Embed(title="💳 حاسبة ضريبة تلقائية", color=discord.Color.green())
+                    embed.add_field(name="💵 المبلغ المطلوب وصوله:", value=f"`{number:,}`", inline=False)
+                    embed.add_field(name="💰 المبلغ الذي يجب تحويله (مع الضريبة):", value=f"`{with_tax:,}`", inline=False)
+                    embed.add_field(name="📉 قيمة الضريبة (5%):", value=f"`{tax_only:,}`", inline=False)
+                    embed.set_footer(text=f"Requested by {message.author.display_name}")
 
                     try:
                         await message.delete()
@@ -340,10 +413,7 @@ async def on_message(message: discord.Message):
 @discord.app_commands.describe(amount="المبلغ المراد حسابه (مثال: 100k أو 50000)")
 async def calculate_tax(interaction: discord.Interaction, amount: str):
     if interaction.channel.id != TAX_CHANNEL_ID:
-        await interaction.response.send_message(
-            f"❌ عذراً، أمر الـ Tax مسموح به فقط في روم <#{TAX_CHANNEL_ID}>!",
-            ephemeral=True,
-        )
+        await interaction.response.send_message(f"❌ عذراً، أمر الـ Tax مسموح به فقط في روم <#{TAX_CHANNEL_ID}>!", ephemeral=True)
         return
 
     try:
@@ -412,7 +482,7 @@ async def send_line(interaction: discord.Interaction, image_url: str):
     try:
         await interaction.response.send_message(image_url)
     except Exception as e:
-        await interaction.response.send_message(f"❌ ما قدرتش نرسل الخط. تأكد من الرابط. الخطأ: `{e}`", ephemeral=True)
+        await interaction.response.send_message(f"❌ ما قدرتش نرسل الخط: `{e}`", ephemeral=True)
 
 
 @bot.tree.command(name="bc", description="إرسال إعلان لشات معين مع صورة")
