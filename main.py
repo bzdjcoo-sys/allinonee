@@ -6,12 +6,8 @@ from discord.ext import commands
 import static_ffmpeg
 import yt_dlp
 
-# تفعيل مسارات FFmpeg
 static_ffmpeg.add_paths()
 
-# ---------------------------------------------------------
-# 1. إعداد الـ Intents
-# ---------------------------------------------------------
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
@@ -19,9 +15,6 @@ intents.voice_states = True
 
 bot = commands.Bot(command_prefix="+", intents=intents)
 
-# ---------------------------------------------------------
-# الإعدادات العامة والأيدي (IDs)
-# ---------------------------------------------------------
 BOT_ADMIN_ID = 1241496820455313533
 DEVELOPER_NAME = "JrOmar"
 
@@ -33,9 +26,6 @@ BC_ROLES = [1534238273440977006]
 TICKET_STAFF_ROLE_ID = 1534294981727227944
 TICKET_CATEGORY_ID = 1534294859320525031
 
-# ---------------------------------------------------------
-# 🎵 إعدادات الموسيقى
-# ---------------------------------------------------------
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'extractaudio': True,
@@ -84,7 +74,7 @@ def check_roles(allowed_roles):
 
 
 # ---------------------------------------------------------
-# 🎛️ لوحة تحكم الموسيقى
+# 🎵 لوحة وأوامر الموسيقى
 # ---------------------------------------------------------
 def create_music_embed(guild):
     embed = discord.Embed(
@@ -94,7 +84,7 @@ def create_music_embed(guild):
     )
     if guild.icon:
         embed.set_thumbnail(url=guild.icon.url)
-    embed.set_footer(text="استعمل الأزرار للتحكم في التشغيل")
+    embed.set_footer(text="استعمل الأزرار أو أمر /play للتحكم")
     return embed
 
 
@@ -145,9 +135,26 @@ class MusicControlView(discord.ui.View):
             await interaction.response.send_message("❌ لا تتوفر أي أغنية شغالة حالياً.", ephemeral=True)
 
 
-# ---------------------------------------------------------
-# 🎧 أوامر الموسيقى المباشرة (Slash Commands)
-# ---------------------------------------------------------
+@bot.tree.command(name="join_voice", description="دخول البوت إلى الروم الصوتية التي توجد فيها")
+async def join_voice(interaction: discord.Interaction):
+    user = interaction.user
+    if not user.voice or not user.voice.channel:
+        await interaction.response.send_message("❌ يجب أن تكون متصلاً بروم صوتية أولاً!", ephemeral=True)
+        return
+
+    voice_channel = user.voice.channel
+    vc = interaction.guild.voice_client
+
+    try:
+        if not vc:
+            await voice_channel.connect(reconnect=True, timeout=30.0)
+        else:
+            await vc.move_to(voice_channel)
+        await interaction.response.send_message(f"✅ تم دخول الروم الصوتية: **{voice_channel.name}**", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ تعذر الدخول للروم: `{e}`", ephemeral=True)
+
+
 @bot.tree.command(name="play", description="تشغيل أغنية من يوتيوب أو رابط مباشر")
 @discord.app_commands.describe(link="رابط فيديو YouTube أو رابط MP3 مباشر")
 async def play_music(interaction: discord.Interaction, link: str):
@@ -163,12 +170,11 @@ async def play_music(interaction: discord.Interaction, link: str):
     vc = interaction.guild.voice_client
 
     try:
-        if not vc:
+        if not vc or not vc.is_connected():
             vc = await voice_channel.connect(reconnect=True, timeout=30.0)
         elif vc.channel.id != voice_channel.id:
             await vc.move_to(voice_channel)
 
-        # استخراج الرابط أو الصوت
         loop = asyncio.get_event_loop()
         if "http://" in link or "https://" in link:
             data = await loop.run_in_executor(None, lambda: ytdl.extract_info(link, download=False))
@@ -202,11 +208,10 @@ async def play_music(interaction: discord.Interaction, link: str):
         await interaction.followup.send(f"▶️ جاري تشغيل: **{title}**", ephemeral=True)
 
     except Exception as e:
-        await interaction.followup.send(f"❌ حدث خطأ أثناء تشغيل الرابط: `{e}`", ephemeral=True)
+        await interaction.followup.send(f"❌ حدث خطأ أثناء التشغيل: `{e}`", ephemeral=True)
 
 
 @bot.tree.command(name="leave_voice", description="إخراج البوت من الروم الصوتية")
-@discord.app_commands.checks.has_permissions(administrator=True)
 async def leave_voice(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
     if vc and vc.is_connected():
@@ -219,7 +224,7 @@ async def leave_voice(interaction: discord.Interaction):
 
 
 # ---------------------------------------------------------
-# 🛠️ نظام الـ Ticket
+# 🛠️ باقي الأوامر (Tickets, Tax, Come, Line, etc...)
 # ---------------------------------------------------------
 class TicketControlView(discord.ui.View):
     def __init__(self):
@@ -328,9 +333,6 @@ async def setup_ticket(interaction: discord.Interaction):
     await interaction.response.send_message("✅ تم إرسال لوحة التيكيت بنجاح!", ephemeral=True)
 
 
-# ---------------------------------------------------------
-# Event On Ready & Bot Events
-# ---------------------------------------------------------
 @bot.event
 async def on_ready():
     bot.add_view(TicketLaunchView())
@@ -338,6 +340,7 @@ async def on_ready():
     bot.add_view(MusicControlView())
 
     try:
+        # مزامنة الأوامر مع السيرفرات فور تشغيل البوت
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} global slash command(s) successfully!")
     except Exception as e:
@@ -384,9 +387,6 @@ async def on_message(message: discord.Message):
     await bot.process_commands(message)
 
 
-# ---------------------------------------------------------
-# الأوامر الأخرى
-# ---------------------------------------------------------
 @bot.tree.command(name="tax", description="حساب ضريبة التحويل ProBot 5%")
 @discord.app_commands.describe(amount="المبلغ المراد حسابه (مثال: 100k أو 50000)")
 async def calculate_tax(interaction: discord.Interaction, amount: str):
@@ -584,7 +584,4 @@ async def close_channel(interaction: discord.Interaction):
         await interaction.response.send_message(f"❌ حدث خطأ أثناء إغلاق الروم: {e}", ephemeral=True)
 
 
-# ---------------------------------------------------------
-# تشغيل البوت
-# ---------------------------------------------------------
 bot.run(os.environ.get("BOT_TOKEN"))
