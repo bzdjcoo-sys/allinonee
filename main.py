@@ -30,7 +30,7 @@ TICKET_STAFF_ROLE_ID = 1534294981727227944
 TICKET_CATEGORY_ID = 1534294859320525031
 
 # ---------------------------------------------------------
-# 🎵 قوائم الأغاني (تقدر تزيد فيها أغانيك بالروابط المباشرة MP3)
+# 🎵 قوائم الأغاني
 # ---------------------------------------------------------
 MUSIC_PLAYLISTS = {
     "playlist_1": {
@@ -38,7 +38,7 @@ MUSIC_PLAYLISTS = {
         "tracks": [
             {
                 "title": "ElGrandeToto - Silhouette",
-                "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"  # بدلها برابط MP3 مباشر للأغنية
+                "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
             },
             {
                 "title": "Stormy - Rap Maroc Hits",
@@ -70,14 +70,15 @@ MUSIC_PLAYLISTS = {
     }
 }
 
+# إضافة خيارات Reconnect و User-Agent لـ FFmpeg
 ffmpeg_options = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -user_agent "Mozilla/5.0"',
     'options': '-vn',
 }
 
 current_track_info = {"title": "No music playing", "url": "None"}
 active_playlist_key = "playlist_1"
-panel_message = None  # لمتابعة وتحديث الرسالة فـ روم الصوت
+panel_message = None
 
 
 def check_roles(allowed_roles):
@@ -101,7 +102,7 @@ def check_roles(allowed_roles):
 
 
 # ---------------------------------------------------------
-# 🎛️ لوحة تحكم الموسيقى (LunaBot Style Player Panel)
+# 🎛️ لوحة تحكم الموسيقى
 # ---------------------------------------------------------
 def create_music_embed(guild):
     playlist_data = MUSIC_PLAYLISTS.get(active_playlist_key, MUSIC_PLAYLISTS["playlist_1"])
@@ -119,6 +120,32 @@ def create_music_embed(guild):
     return embed
 
 
+def play_next_song(guild_id):
+    """دالة كتشغل الأغنية التالية تلقائياً عند انتهاء الأغنية الحالية"""
+    guild = bot.get_guild(guild_id)
+    if not guild:
+        return
+
+    vc = guild.voice_client
+    if not vc or not vc.is_connected():
+        return
+
+    playlist_data = MUSIC_PLAYLISTS.get(active_playlist_key, MUSIC_PLAYLISTS["playlist_1"])
+    selected_track = random.choice(playlist_data["tracks"])
+
+    global current_track_info
+    current_track_info = selected_track
+
+    try:
+        source = discord.FFmpegPCMAudio(selected_track["url"], **ffmpeg_options)
+        vc.play(source, after=lambda e: play_next_song(guild_id) if not e else print(f"Music Error: {e}"))
+
+        if panel_message:
+            bot.loop.create_task(panel_message.edit(embed=create_music_embed(guild), view=MusicControlView()))
+    except Exception as e:
+        print(f"Error playing song: {e}")
+
+
 class PlaylistSelect(discord.ui.Select):
     def __init__(self):
         options = [
@@ -134,16 +161,11 @@ class PlaylistSelect(discord.ui.Select):
         vc = interaction.guild.voice_client
 
         if vc and vc.is_connected():
+            await interaction.response.send_message(f"✅ تم تغيير القائمة إلى **{MUSIC_PLAYLISTS[active_playlist_key]['name']}**", ephemeral=True)
             if vc.is_playing() or vc.is_paused():
                 vc.stop()
-            await interaction.response.send_message(f"✅ تم تغيير القائمة إلى **{MUSIC_PLAYLISTS[active_playlist_key]['name']}**", ephemeral=True)
-            
-            # تحديث البنل الأساسية
-            if panel_message:
-                try:
-                    await panel_message.edit(embed=create_music_embed(interaction.guild), view=MusicControlView())
-                except Exception:
-                    pass
+            else:
+                play_next_song(interaction.guild.id)
         else:
             await interaction.response.send_message("❌ البوت غير متصل بأي روم صوتية حالياً!", ephemeral=True)
 
@@ -198,33 +220,6 @@ class MusicControlView(discord.ui.View):
             await interaction.response.send_message("❌ لا تتوفر أي أغنية شغالة حالياً للحصول على رابطها.", ephemeral=True)
 
 
-async def play_playlist_loop(vc: discord.VoiceClient, guild: discord.Guild):
-    """دالة تدوير وتشغيل الأغاني"""
-    global current_track_info, panel_message
-    while vc and vc.is_connected():
-        if not vc.is_playing() and not vc.is_paused():
-            try:
-                playlist_data = MUSIC_PLAYLISTS.get(active_playlist_key, MUSIC_PLAYLISTS["playlist_1"])
-                selected_track = random.choice(playlist_data["tracks"])
-                
-                current_track_info = selected_track
-                
-                source = discord.FFmpegPCMAudio(selected_track["url"], **ffmpeg_options)
-                vc.play(source)
-
-                # تحديث البنل فـ شات الصوت
-                if panel_message:
-                    try:
-                        await panel_message.edit(embed=create_music_embed(guild), view=MusicControlView())
-                    except Exception:
-                        pass
-
-            except Exception as e:
-                print(f"Error in music loop: {e}")
-        
-        await asyncio.sleep(3)
-
-
 @bot.tree.command(name="join_voice", description="إدخال البوت للروم الصوتية وإرسال بنل الموسيقى في شات الروم الصوتية")
 @discord.app_commands.describe(channel="الروم الصوتية المراد إدخال البوت إليها")
 @discord.app_commands.checks.has_permissions(administrator=True)
@@ -239,14 +234,13 @@ async def join_voice(interaction: discord.Interaction, channel: discord.VoiceCha
         else:
             vc = await channel.connect(reconnect=True, timeout=20.0)
 
-        if vc.is_playing():
+        if vc.is_playing() or vc.is_paused():
             vc.stop()
 
-        # إرسال البنل فـ الشات ديال الروم الصوتية براسها (Text Chat of Voice Channel)
         panel_message = await channel.send(embed=create_music_embed(interaction.guild), view=MusicControlView())
-
-        # تشغيل حلقة الموسيقى
-        bot.loop.create_task(play_playlist_loop(vc, interaction.guild))
+        
+        # بدء التشغيل مباشرة
+        play_next_song(interaction.guild.id)
 
         await interaction.followup.send(f"✅ تم دخول البوت إلى {channel.mention} وإرسال لوحة التحكم فـ شات الروم!", ephemeral=True)
     except Exception as e:
@@ -265,7 +259,7 @@ async def leave_voice(interaction: discord.Interaction):
 
 
 # ---------------------------------------------------------
-# 🛠️ نظام الـ Dual Ticket (نظام التيكيت المزدوجة)
+# 🛠️ نظام الـ Dual Ticket
 # ---------------------------------------------------------
 class TicketControlView(discord.ui.View):
     def __init__(self):
@@ -431,7 +425,7 @@ async def on_message(message: discord.Message):
 
 
 # ---------------------------------------------------------
-# باقي الأوامر (Tax, Come, Line, Broadcast, Purge, Open/Close)
+# باقي الأوامر
 # ---------------------------------------------------------
 @bot.tree.command(name="tax", description="حساب ضريبة التحويل ProBot 5%")
 @discord.app_commands.describe(amount="المبلغ المراد حسابه (مثال: 100k أو 50000)")
