@@ -30,31 +30,42 @@ TICKET_STAFF_ROLE_ID = 1534294981727227944
 TICKET_CATEGORY_ID = 1534294859320525031
 
 # ---------------------------------------------------------
-# 🎵 الـ Playlists والروابط المباشرة للاغاني
+# 🎵 قوائم الأغاني (تقدر تزيد فيها أغانيك بالروابط المباشرة MP3)
 # ---------------------------------------------------------
 MUSIC_PLAYLISTS = {
     "playlist_1": {
-        "name": "🎧 Chill & Relax Hits",
-        "description": "موسيقى هادئة للاسترخاء والتركيز",
+        "name": "🇲🇦 Rap Maroc (ElGrandeToto / Stormy)",
         "tracks": [
-            {"title": "Chill Vibes Radio 24/7", "url": "https://stream.zeno.fm/f3wvbbqmdg8uv"},
-            {"title": "Lo-Fi Beats Station", "url": "https://stream.zeno.fm/0r0xa792kwzuv"}
+            {
+                "title": "ElGrandeToto - Silhouette",
+                "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"  # بدلها برابط MP3 مباشر للأغنية
+            },
+            {
+                "title": "Stormy - Rap Maroc Hits",
+                "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
+            }
         ]
     },
     "playlist_2": {
-        "name": "🔥 Gaming & Bass Boosted",
-        "description": "أغاني حماسية للألعاب والـ Gaming",
+        "name": "🇪🇬 Egyptian Rap & Afro (Wegz / Marwan Pablo)",
         "tracks": [
-            {"title": "FIP Radio Smooth Hits", "url": "https://icecast.radiofrance.fr/fip-midfi.mp3"},
-            {"title": "NCS Style Energy Stream", "url": "https://stream.zeno.fm/f3wvbbqmdg8uv"}
+            {
+                "title": "Wegz - El Melok",
+                "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
+            },
+            {
+                "title": "Marwan Pablo - Control",
+                "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3"
+            }
         ]
     },
     "playlist_3": {
-        "name": "📻 Pop & Top Charts Radio",
-        "description": "أحدث الأغاني والراديو العالمي",
+        "name": "🔥 Chill & Gaming Mix",
         "tracks": [
-            {"title": "BBC Radio 1 Hits", "url": "http://stream.live.vc.bbcmedia.co.uk/bbc_radio_one"},
-            {"title": "Global Hits Station", "url": "https://icecast.radiofrance.fr/fip-midfi.mp3"}
+            {
+                "title": "Lofi Moroccan Remix",
+                "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3"
+            }
         ]
     }
 }
@@ -64,9 +75,9 @@ ffmpeg_options = {
     'options': '-vn',
 }
 
-# متغيّرات عامة لتتبع الأغنية الحالية والـ Voice Client
 current_track_info = {"title": "No music playing", "url": "None"}
 active_playlist_key = "playlist_1"
+panel_message = None  # لمتابعة وتحديث الرسالة فـ روم الصوت
 
 
 def check_roles(allowed_roles):
@@ -93,29 +104,29 @@ def check_roles(allowed_roles):
 # 🎛️ لوحة تحكم الموسيقى (LunaBot Style Player Panel)
 # ---------------------------------------------------------
 def create_music_embed(guild):
+    playlist_data = MUSIC_PLAYLISTS.get(active_playlist_key, MUSIC_PLAYLISTS["playlist_1"])
+    songs_list_text = "\n".join([f"• `{t['title']}`" for t in playlist_data["tracks"]])
+
     embed = discord.Embed(
         title="🎵 Luna Music Player | لوحة تشغيل الموسيقى",
         description=f"**🔊 الأغنية الشغالة حالياً:**\n▶️ `{current_track_info['title']}`\n\n"
-                    f"**📋 قوائم الموسيقى المتاحة (Playlists):**\n"
-                    f"1️⃣ **Playlist 1:** Chill & Relax Hits\n"
-                    f"2️⃣ **Playlist 2:** Gaming & Bass Boosted\n"
-                    f"3️⃣ **Playlist 3:** Pop & Top Charts Radio",
+                    f"**📋 الأغاني المتاحة فـ {playlist_data['name']}:**\n{songs_list_text}",
         color=discord.Color.purple()
     )
     if guild.icon:
         embed.set_thumbnail(url=guild.icon.url)
-    embed.set_footer(text="اختر Playlist من القائمة أسفله أو استعمل الأزراز للتحكم فـ الموسيقى")
+    embed.set_footer(text="اختر القائمة من الأسفل أو استعمل أزرار التحكم")
     return embed
 
 
 class PlaylistSelect(discord.ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="Playlist 1: Chill Hits", value="playlist_1", description="Chill & Relax Beats", emoji="🎧"),
-            discord.SelectOption(label="Playlist 2: Gaming Hits", value="playlist_2", description="Bass & High Energy Music", emoji="🔥"),
-            discord.SelectOption(label="Playlist 3: Radio Hits", value="playlist_3", description="BBC & Global Radio Charts", emoji="📻")
+            discord.SelectOption(label="Rap Maroc (Toto / Stormy)", value="playlist_1", description="🇲🇦 راب مغربي", emoji="🇲🇦"),
+            discord.SelectOption(label="Egyptian Rap (Wegz)", value="playlist_2", description="🇪🇬 راب وراب مصري", emoji="🇪🇬"),
+            discord.SelectOption(label="Chill & Gaming", value="playlist_3", description="🔥 ميكس ألعاب وهادئ", emoji="🎮")
         ]
-        super().__init__(placeholder="🎵 اختر Playlist لتغير نوع الموسيقى...", min_values=1, max_values=1, options=options)
+        super().__init__(placeholder="🎵 اختر قائمة الأغاني...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
         global active_playlist_key
@@ -124,8 +135,15 @@ class PlaylistSelect(discord.ui.Select):
 
         if vc and vc.is_connected():
             if vc.is_playing() or vc.is_paused():
-                vc.stop()  # سيتم الانتقال تلقائياً للأغنية التالية من الـ Playlist الجديدة
-            await interaction.response.edit_message(content=f"✅ تم تغيير الـ Playlist إلى **{MUSIC_PLAYLISTS[active_playlist_key]['name']}**", embed=create_music_embed(interaction.guild))
+                vc.stop()
+            await interaction.response.send_message(f"✅ تم تغيير القائمة إلى **{MUSIC_PLAYLISTS[active_playlist_key]['name']}**", ephemeral=True)
+            
+            # تحديث البنل الأساسية
+            if panel_message:
+                try:
+                    await panel_message.edit(embed=create_music_embed(interaction.guild), view=MusicControlView())
+                except Exception:
+                    pass
         else:
             await interaction.response.send_message("❌ البوت غير متصل بأي روم صوتية حالياً!", ephemeral=True)
 
@@ -144,10 +162,10 @@ class MusicControlView(discord.ui.View):
 
         if vc.is_playing():
             vc.pause()
-            await interaction.response.send_message("⏸️ تم إيقاف الموسيقى مؤقتاً (Paused).", ephemeral=True)
+            await interaction.response.send_message("⏸️ تم إيقاف الموسيقى مؤقتاً.", ephemeral=True)
         elif vc.is_paused():
             vc.resume()
-            await interaction.response.send_message("▶️ تم استئناف تشغيل الموسيقى (Resumed).", ephemeral=True)
+            await interaction.response.send_message("▶️ تم استئناف تشغيل الموسيقى.", ephemeral=True)
         else:
             await interaction.response.send_message("❌ لا توجد موسيقى شغالة حالياً.", ephemeral=True)
 
@@ -156,7 +174,7 @@ class MusicControlView(discord.ui.View):
         vc = interaction.guild.voice_client
         if vc and (vc.is_playing() or vc.is_paused()):
             vc.stop()
-            await interaction.response.send_message("⏭️ تم تخطي الأغنية الحالية وتغيير الموسيقى!", ephemeral=True)
+            await interaction.response.send_message("⏭️ تم تخطي الأغنية الحالية!", ephemeral=True)
         else:
             await interaction.response.send_message("❌ لا توجد أغنية لتخطيها.", ephemeral=True)
 
@@ -165,7 +183,7 @@ class MusicControlView(discord.ui.View):
         vc = interaction.guild.voice_client
         if vc and vc.is_connected():
             await vc.disconnect()
-            await interaction.response.send_message("⏹️ تم إيقاف الموسيقى وإخراج البوت من الروم الصوتية.", ephemeral=True)
+            await interaction.response.send_message("⏹️ تم إيقاف الموسيقى وخروج البوت.", ephemeral=True)
         else:
             await interaction.response.send_message("❌ البوت غير متصل بأي روم صوتية.", ephemeral=True)
 
@@ -173,16 +191,16 @@ class MusicControlView(discord.ui.View):
     async def give_link(self, interaction: discord.Interaction, button: discord.ui.Button):
         if current_track_info["url"] != "None":
             await interaction.response.send_message(
-                f"🔗 **رابط الموسيقى الشغالة حالياً:**\n📌 **الاسم:** `{current_track_info['title']}`\n🌐 **الرابط:** {current_track_info['url']}",
+                f"🔗 **رابط الأغنية الشغالة حالياً:**\n📌 **الاسم:** `{current_track_info['title']}`\n🌐 **الرابط:** {current_track_info['url']}",
                 ephemeral=True
             )
         else:
             await interaction.response.send_message("❌ لا تتوفر أي أغنية شغالة حالياً للحصول على رابطها.", ephemeral=True)
 
 
-async def play_playlist_loop(vc: discord.VoiceClient, interaction: discord.Interaction):
-    """دالة تدوير وتشغيل الموسيقى"""
-    global current_track_info
+async def play_playlist_loop(vc: discord.VoiceClient, guild: discord.Guild):
+    """دالة تدوير وتشغيل الأغاني"""
+    global current_track_info, panel_message
     while vc and vc.is_connected():
         if not vc.is_playing() and not vc.is_paused():
             try:
@@ -194,23 +212,25 @@ async def play_playlist_loop(vc: discord.VoiceClient, interaction: discord.Inter
                 source = discord.FFmpegPCMAudio(selected_track["url"], **ffmpeg_options)
                 vc.play(source)
 
-                # تحديث البنل بالمعلومات الجديدة
-                try:
-                    await interaction.edit_original_response(embed=create_music_embed(interaction.guild), view=MusicControlView())
-                except Exception:
-                    pass
+                # تحديث البنل فـ شات الصوت
+                if panel_message:
+                    try:
+                        await panel_message.edit(embed=create_music_embed(guild), view=MusicControlView())
+                    except Exception:
+                        pass
 
             except Exception as e:
                 print(f"Error in music loop: {e}")
         
-        await asyncio.sleep(4)
+        await asyncio.sleep(3)
 
 
-@bot.tree.command(name="join_voice", description="إدخال البوت للروم الصوتية وإظهار بنل التحكم فـ الموسيقى")
+@bot.tree.command(name="join_voice", description="إدخال البوت للروم الصوتية وإرسال بنل الموسيقى في شات الروم الصوتية")
 @discord.app_commands.describe(channel="الروم الصوتية المراد إدخال البوت إليها")
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def join_voice(interaction: discord.Interaction, channel: discord.VoiceChannel):
-    await interaction.response.defer()
+    global panel_message
+    await interaction.response.defer(ephemeral=True)
     try:
         vc = interaction.guild.voice_client
         if vc:
@@ -222,9 +242,13 @@ async def join_voice(interaction: discord.Interaction, channel: discord.VoiceCha
         if vc.is_playing():
             vc.stop()
 
-        bot.loop.create_task(play_playlist_loop(vc, interaction))
+        # إرسال البنل فـ الشات ديال الروم الصوتية براسها (Text Chat of Voice Channel)
+        panel_message = await channel.send(embed=create_music_embed(interaction.guild), view=MusicControlView())
 
-        await interaction.followup.send(embed=create_music_embed(interaction.guild), view=MusicControlView())
+        # تشغيل حلقة الموسيقى
+        bot.loop.create_task(play_playlist_loop(vc, interaction.guild))
+
+        await interaction.followup.send(f"✅ تم دخول البوت إلى {channel.mention} وإرسال لوحة التحكم فـ شات الروم!", ephemeral=True)
     except Exception as e:
         await interaction.followup.send(f"❌ حدث خطأ أثناء الاتصال بالروم: `{e}`", ephemeral=True)
 
