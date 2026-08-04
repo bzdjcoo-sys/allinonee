@@ -34,7 +34,7 @@ TICKET_STAFF_ROLE_ID = 1534294981727227944
 TICKET_CATEGORY_ID = 1534294859320525031
 
 # ---------------------------------------------------------
-# 🎵 قوائم الأغاني (روابط مباشرة ومجربة)
+# 🎵 قوائم الأغاني
 # ---------------------------------------------------------
 MUSIC_PLAYLISTS = {
     "playlist_1": {
@@ -74,7 +74,6 @@ MUSIC_PLAYLISTS = {
     }
 }
 
-# خيارات FFmpeg المحسنة لضمان تشغيل الصوت بدون قطع أو صمت
 ffmpeg_options = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn',
@@ -125,7 +124,6 @@ def create_music_embed(guild):
 
 
 def play_next_song(guild_id):
-    """دالة تشغيل الأغنية التالية تلقائياً عند انتهاء الأغنية الحالية"""
     guild = bot.get_guild(guild_id)
     if not guild:
         return
@@ -144,15 +142,15 @@ def play_next_song(guild_id):
         if error:
             print(f"Music Error: {error}")
         if vc and vc.is_connected():
-            bot.loop.call_soon_threadsafe(play_next_song, guild_id)
+            fut = asyncio.run_coroutine_threadsafe(asyncio.sleep(1), bot.loop)
+            fut.add_done_callback(lambda _: bot.loop.call_soon_threadsafe(play_next_song, guild_id))
 
     try:
         if vc.is_playing() or vc.is_paused():
             vc.stop()
 
         ffmpeg_exe = static_ffmpeg.run.get_or_fetch_platform_executables_or_raise()[0]
-        
-        # استخدام FFmpegPCMAudio مع الموجه المباشر
+
         audio_source = discord.FFmpegPCMAudio(
             selected_track["url"],
             executable=ffmpeg_exe,
@@ -174,7 +172,7 @@ class PlaylistSelect(discord.ui.Select):
             discord.SelectOption(label="Egyptian Rap (Wegz)", value="playlist_2", description="🇪🇬 راب وراب مصري", emoji="🇪🇬"),
             discord.SelectOption(label="Chill & Gaming", value="playlist_3", description="🔥 ميكس ألعاب وهادئ", emoji="🎮")
         ]
-        super().__init__(placeholder="🎵 اختر قائمة الأغاني...", min_values=1, max_values=1, options=options)
+        super().__init__(placeholder="🎵 اختر قائمة الأغاني...", min_values=1, max_values=1, options=options, custom_id="playlist_select_menu")
 
     async def callback(self, interaction: discord.Interaction):
         global active_playlist_key
@@ -238,7 +236,7 @@ class MusicControlView(discord.ui.View):
             await interaction.response.send_message("❌ لا تتوفر أي أغنية شغالة حالياً للحصول على رابطها.", ephemeral=True)
 
 
-@bot.tree.command(name="join_voice", description="إدخال البوت للروم الصوتية وإرسال بنل الموسيقى في شات الروم الصوتية")
+@bot.tree.command(name="join_voice", description="إدخال البوت للروم الصوتية وإرسال بنل الموسيقى")
 @discord.app_commands.describe(channel="الروم الصوتية المراد إدخال البوت إليها")
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def join_voice(interaction: discord.Interaction, channel: discord.VoiceChannel):
@@ -252,13 +250,11 @@ async def join_voice(interaction: discord.Interaction, channel: discord.VoiceCha
         else:
             vc = await channel.connect(reconnect=True, timeout=30.0)
 
-        await asyncio.sleep(2)
-
+        await asyncio.sleep(1)
         panel_message = await channel.send(embed=create_music_embed(interaction.guild), view=MusicControlView())
-        
         play_next_song(interaction.guild.id)
 
-        await interaction.followup.send(f"✅ تم دخول البوت إلى {channel.mention} وإرسال لوحة التحكم فـ شات الروم!", ephemeral=True)
+        await interaction.followup.send(f"✅ تم دخول البوت إلى {channel.mention} وإرسال لوحة التحكم!", ephemeral=True)
     except Exception as e:
         await interaction.followup.send(f"❌ حدث خطأ أثناء الاتصال بالروم: `{e}`", ephemeral=True)
 
@@ -275,7 +271,7 @@ async def leave_voice(interaction: discord.Interaction):
 
 
 # ---------------------------------------------------------
-# 🛠️ نظام الـ Dual Ticket
+# 🛠️ نظام الـ Ticket
 # ---------------------------------------------------------
 class TicketControlView(discord.ui.View):
     def __init__(self):
@@ -441,7 +437,7 @@ async def on_message(message: discord.Message):
 
 
 # ---------------------------------------------------------
-# باقي الأوامر
+# الأوامر الأخرى
 # ---------------------------------------------------------
 @bot.tree.command(name="tax", description="حساب ضريبة التحويل ProBot 5%")
 @discord.app_commands.describe(amount="المبلغ المراد حسابه (مثال: 100k أو 50000)")
@@ -451,8 +447,8 @@ async def calculate_tax(interaction: discord.Interaction, amount: str):
         return
 
     try:
-        clean_amount = amount.lower().replace("k", "000").replace("m", "000000").replace(",", "")
-        number = int(clean_amount)
+        clean_amount = amount.lower().replace("k", "000").replace("m", "000000").replace("b", "000000000").replace(",", "")
+        number = int(float(clean_amount))
 
         if number <= 0:
             await interaction.response.send_message("❌ يرجى إدخال مبلغ صحيح أكبر من 0.", ephemeral=True)
@@ -576,10 +572,10 @@ class ConfirmDeleteAll(discord.ui.View):
             await interaction.response.send_message("❌ ليس مسموحاً لك استخدام هذا الزر.", ephemeral=True)
             return
 
-        await interaction.response.edit_message(content="⏳ جاري مسح جميع رسائل الروم...", view=None)
+        await interaction.response.edit_message(content="⏳ جاري مسح الرسائل...", view=None)
         try:
-            deleted = await interaction.channel.purge(limit=None)
-            temp_msg = await interaction.channel.send(f"✅ تم مسح `{len(deleted)}` رسالة بنجاح!")
+            deleted = await interaction.channel.purge(limit=100)
+            temp_msg = await interaction.channel.send(f"✅ تم مسح آخر `{len(deleted)}` رسالة بنجاح!")
             await asyncio.sleep(3)
             await temp_msg.delete()
         except Exception as e:
@@ -593,14 +589,14 @@ class ConfirmDeleteAll(discord.ui.View):
         await interaction.edit_original_response(content="❌ تم إلغاء عملية الحذف.", view=None)
 
 
-@bot.tree.command(name="ms7", description="مسح جميع الرسائل في الروم الحالية")
+@bot.tree.command(name="ms7", description="مسح آخر 100 رسالة في الروم الحالية")
 @discord.app_commands.checks.has_permissions(manage_messages=True)
 async def ms7_all(interaction: discord.Interaction):
     view = ConfirmDeleteAll(interaction.user)
-    await interaction.response.send_message("⚠️ **هل أنت متأكد من أنك تريد حذف جميع رسائل هذه الروم؟**", view=view, ephemeral=True)
+    await interaction.response.send_message("⚠️ **هل أنت متأكد من أنك تريد حذف الرسائل فـ هذه الروم؟**", view=view, ephemeral=True)
 
 
-@bot.tree.command(name="ms7_count", description="مسح عدد محدد من الرسائل فوق رسالة الأمر")
+@bot.tree.command(name="ms7_count", description="مسح عدد محدد من الرسائل")
 @discord.app_commands.describe(count="عدد الرسائل المراد حذفها")
 @discord.app_commands.checks.has_permissions(manage_messages=True)
 async def mss7_count(interaction: discord.Interaction, count: int):
