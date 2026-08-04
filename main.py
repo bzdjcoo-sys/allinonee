@@ -5,6 +5,8 @@ import re
 import discord
 from discord.ext import commands
 import static_ffmpeg
+
+# تفعيل مسارات FFmpeg
 static_ffmpeg.add_paths()
 
 # ---------------------------------------------------------
@@ -72,7 +74,7 @@ MUSIC_PLAYLISTS = {
     }
 }
 
-# إضافة خيارات Reconnect و User-Agent لـ FFmpeg
+# إضافة خيارات Reconnect لضمان استمرار البث
 ffmpeg_options = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -user_agent "Mozilla/5.0"',
     'options': '-vn',
@@ -138,9 +140,20 @@ def play_next_song(guild_id):
     global current_track_info
     current_track_info = selected_track
 
+    def after_playing(error):
+        if error:
+            print(f"Music Error: {error}")
+        bot.loop.call_soon_threadsafe(play_next_song, guild_id)
+
     try:
-        source = discord.FFmpegPCMAudio(selected_track["url"], **ffmpeg_options)
-        vc.play(source, after=lambda e: play_next_song(guild_id) if not e else print(f"Music Error: {e}"))
+        if vc.is_playing() or vc.is_paused():
+            vc.stop()
+
+        # جلب المسار الخاص بـ FFmpeg من مكتبة static_ffmpeg
+        ffmpeg_exe = static_ffmpeg.run.get_or_fetch_platform_executables_or_raise()[0]
+        source = discord.FFmpegPCMAudio(selected_track["url"], executable=ffmpeg_exe, **ffmpeg_options)
+        
+        vc.play(source, after=after_playing)
 
         if panel_message:
             bot.loop.create_task(panel_message.edit(embed=create_music_embed(guild), view=MusicControlView()))
@@ -236,12 +249,15 @@ async def join_voice(interaction: discord.Interaction, channel: discord.VoiceCha
         else:
             vc = await channel.connect(reconnect=True, timeout=20.0)
 
+        # مهلة بسيطة للتأكد من استقرار الاتصال بالصوت
+        await asyncio.sleep(1)
+
         if vc.is_playing() or vc.is_paused():
             vc.stop()
 
         panel_message = await channel.send(embed=create_music_embed(interaction.guild), view=MusicControlView())
         
-        # بدء التشغيل مباشرة
+        # بدء التشغيل
         play_next_song(interaction.guild.id)
 
         await interaction.followup.send(f"✅ تم دخول البوت إلى {channel.mention} وإرسال لوحة التحكم فـ شات الروم!", ephemeral=True)
